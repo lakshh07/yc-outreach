@@ -1,0 +1,14 @@
+Subject: {company}, quick question
+Subject: {first_name}, quick question
+Subject: Quick question
+
+Hi {first_name},
+
+I came across {company} and liked what you're building around {one_liner}. I'm exploring my next engineering role and thought there could be a fit.
+
+I'm currently <your role> at <your company>, where I <one line about what you've built>.
+
+Are you hiring engineers at the moment? Happy to send over my background and a few things I've built.
+
+Best,
+[Your Name](https://www.linkedin.com/in/your-handle)

@@ -1,0 +1,16 @@
+# secrets
+.env
+
+# your personal email template (template.example.txt is the shared one)
+template.txt
+
+# scraped founder data / exports
+*.csv
+.cache/
+
+# python
+.venv/
+__pycache__/
+*.pyc
+
+.DS_Store
