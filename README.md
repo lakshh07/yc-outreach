@@ -191,3 +191,7 @@ template.example.txt   example email; copy it to template.txt
 .env.example           example config; copy it to .env
 requirements.txt
 ```
+
+## License
+
+[MIT](LICENSE) © Lakshay Maini
