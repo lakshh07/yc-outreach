@@ -2,6 +2,8 @@
 
 A command-line tool for emailing Y Combinator founders about jobs, sent from your own Gmail.
 
+Built for my own job search. Open-sourced in case it's useful to other engineers looking for startup roles.
+
 Pick a YC batch (or a whole year), and it:
 
 1. Pulls every company and founder from YC's public directory.
@@ -9,20 +11,7 @@ Pick a YC batch (or a whole year), and it:
 3. Sends your template to each founder through Gmail, slowly, up to a daily limit.
 4. Tracks queued, sent, replied and bounced in Postgres, and can A/B test subject lines.
 
-```
-$ python3 outreach.py status
-Total founders        512   (38 without email)
-Queued                120
-Sent today             40 / 40   (0 left today)
-Contacted total       180
-Replied                14   (8% reply rate)
-Bounced                 3
-
-Subject A/B test                                           sent  replied   rate
-  A  {company}, quick question                                60        6  10.0%
-  B  {first_name}, quick question                             60        5   8.3%
-  C  Quick question                                           60        3   5.0%
-```
+![python3 outreach.py status](assets/status.png)
 
 ---
 
@@ -191,6 +180,15 @@ template.example.txt   example email; copy it to template.txt
 .env.example           example config; copy it to .env
 requirements.txt
 ```
+
+## Limitations
+
+This is a small personal tool, not a production-grade platform.
+
+- **Email finding is best-effort.** Without outbound port 25 (blocked on most cloud servers), emails can't be verified and come out low confidence. On catch-all domains, emails are educated guesses.
+- **Gmail only.** It sends through Gmail SMTP and reads replies over IMAP. Other providers aren't supported.
+- **Low volume by design.** It's built for tens of emails a day, not thousands. Gmail limits and your sender reputation cap how far it scales.
+- **YC only.** It reads YC's public directory, so it depends on that site's structure and may break if it changes.
 
 ## License
 
