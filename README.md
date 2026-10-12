@@ -72,6 +72,7 @@ python3 outreach.py test             # send yourself one copy per subject line
 # 4. Send (throttled, stops at the daily limit; Ctrl+C is safe)
 python3 outreach.py send --limit 5   # start small
 python3 outreach.py send
+python3 outreach.py send --batch "Summer 2025"   # only one batch
 
 # 5. Track results
 python3 outreach.py replies          # check your inbox and mark replies and bounces
@@ -91,7 +92,7 @@ Run `send` and `replies` once a day until the queue is empty.
 | `skip EMAIL ...`                                                    | Never emails these addresses                                                                            |
 | `preview [--n 3]`                                                   | Prints the rendered email for the next queued founders                                                  |
 | `test`                                                              | Sends the rendered email to yourself, one copy per subject line                                         |
-| `send [--limit N] [--dry-run]`                                      | Sends queued emails. `--dry-run` only lists who would get one.                                          |
+| `send [--batch B] [--limit N] [--dry-run]`                          | Sends queued emails, optionally only for batch `B`. `--dry-run` only lists who would get one.           |
 | `replies`                                                           | Checks your Gmail inbox for replies and bounces                                                         |
 | `status`                                                            | Shows totals, a per-batch breakdown and the A/B results                                                 |
 | `ab`                                                                | Shows only the A/B results                                                                              |

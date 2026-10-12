@@ -11,7 +11,7 @@ State lives in Postgres (DATABASE_URL, default: local `outreach` db).
   list     [--status S] [--batch B]                             show founders
   preview  [--n 3]                                              render the template for the next queued founders
   test                                                          send the next queued email to yourself
-  send     [--limit N] [--dry-run]                              send queued emails, throttled, up to the daily limit
+  send     [--batch B] [--limit N] [--dry-run]                  send queued emails, throttled, up to the daily limit
   replies                                                       check Gmail for replies and bounces
   ab                                                            reply rate per subject line
 
@@ -400,8 +400,12 @@ def cmd_send(args):
         limit = min(limit, args.limit)
     if limit <= 0:
         sys.exit(f"Daily limit reached ({CFG['daily_limit']}). Run again tomorrow or raise DAILY_LIMIT in .env")
-    queue = con.execute("SELECT * FROM contacts WHERE status='queued' ORDER BY queued_at, id LIMIT %s", (limit,)).fetchall()
+    where, params = filters(args, "status = 'queued'")
+    queue = con.execute(f"SELECT * FROM contacts WHERE {where} ORDER BY queued_at, id LIMIT %s",
+                        params + [limit]).fetchall()
     if not queue:
+        if args.batch:
+            sys.exit(f'No queued founders in "{args.batch}". Run: python3 outreach.py queue --batch "{args.batch}"')
         sys.exit("Queue is empty. Run: python3 outreach.py queue")
 
     subjects, body = load_template()
@@ -560,6 +564,7 @@ def main():
     sub.add_parser("test", help="send one rendered email to yourself").set_defaults(fn=cmd_test)
 
     p = sub.add_parser("send", help="send queued emails")
+    p.add_argument("--batch", help='only send to this batch, e.g. "Summer 2025"')
     p.add_argument("--limit", type=int, default=0)
     p.add_argument("--dry-run", action="store_true")
     p.set_defaults(fn=cmd_send)
