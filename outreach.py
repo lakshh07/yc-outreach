@@ -93,7 +93,13 @@ CFG = {
     "daily_limit": int(os.environ.get("DAILY_LIMIT", 40)),
     "min_delay": float(os.environ.get("MIN_DELAY", 60)),
     "max_delay": float(os.environ.get("MAX_DELAY", 180)),
+    # hide founder names/emails in output, e.g. in public GitHub Actions logs
+    "redact": os.environ.get("REDACT_LOGS", "").lower() in ("1", "true", "yes"),
 }
+
+
+def who(c):
+    return f"contact #{c['id']}" if CFG["redact"] else f"{c['founder']} <{c['email']}> ({c['company']})"
 
 
 def require_gmail():
@@ -398,21 +404,24 @@ def cmd_send(args):
     limit = CFG["daily_limit"] - sent_today(con)
     if args.limit:
         limit = min(limit, args.limit)
-    if limit <= 0:
-        sys.exit(f"Daily limit reached ({CFG['daily_limit']}). Run again tomorrow or raise DAILY_LIMIT in .env")
+    if limit <= 0:  # nothing to do is not an error, so scheduled runs don't fail on it
+        print(f"Daily limit reached ({CFG['daily_limit']}). Run again tomorrow or raise DAILY_LIMIT in .env")
+        return
     where, params = filters(args, "status = 'queued'")
     queue = con.execute(f"SELECT * FROM contacts WHERE {where} ORDER BY queued_at, id LIMIT %s",
                         params + [limit]).fetchall()
     if not queue:
         if args.batch:
-            sys.exit(f'No queued founders in "{args.batch}". Run: python3 outreach.py queue --batch "{args.batch}"')
-        sys.exit("Queue is empty. Run: python3 outreach.py queue")
+            print(f'No queued founders in "{args.batch}". Run: python3 outreach.py queue --batch "{args.batch}"')
+        else:
+            print("Queue is empty. Run: python3 outreach.py queue")
+        return
 
     subjects, body = load_template()
     if args.dry_run:
         print(f"DRY RUN - would send {len(queue)} emails:")
         for c in queue:
-            print(f"  {c['founder']:24s} {c['email']:34s} {c['company']}")
+            print(f"  contact #{c['id']}" if CFG["redact"] else f"  {c['founder']:24s} {c['email']:34s} {c['company']}")
         return
 
     require_gmail()
@@ -436,7 +445,7 @@ def cmd_send(args):
                     smtp.send_message(msg)
             except smtplib.SMTPRecipientsRefused as e:
                 con.execute("UPDATE contacts SET status='failed', error=%s WHERE id=%s", (str(e)[:300], c["id"]))
-                print(f"[{i}/{len(queue)}] FAILED {c['email']}: {e}")
+                print(f"[{i}/{len(queue)}] FAILED {who(c)}: {'' if CFG['redact'] else e}")
                 continue
             except (smtplib.SMTPDataError, smtplib.SMTPSenderRefused) as e:
                 print(f"\nGmail refused the message, stopping: {e}")
@@ -445,7 +454,7 @@ def cmd_send(args):
                         "WHERE id=%s", (msg["Message-ID"], subj, c["id"]))
             sent += 1
             label = f" [{variant_label(subjects, subj)}]" if len(subjects) > 1 else ""
-            print(f"[{i}/{len(queue)}] sent{label} -> {c['founder']} <{c['email']}> ({c['company']})")
+            print(f"[{i}/{len(queue)}] sent{label} -> {who(c)}")
     except KeyboardInterrupt:
         print("\nStopped. Everything sent so far is recorded.")
     finally:
@@ -513,9 +522,10 @@ def cmd_replies(args):
     if bounced:
         con.execute("UPDATE contacts SET status='bounced' WHERE id = ANY(%s)", (list(bounced),))
     print(f"{len(replied)} new replies, {len(bounced)} bounces")
-    for r in con.execute("SELECT founder, company, email FROM contacts WHERE id = ANY(%s)", (list(replied | bounced),)):
-        tag = "bounced" if r["email"] in {e for e, i in by_email.items() if i in bounced} else "replied"
-        print(f"  {tag:8s} {r['founder']} ({r['company']}) <{r['email']}>")
+    for r in con.execute("SELECT id, founder, company, email FROM contacts WHERE id = ANY(%s)",
+                         (list(replied | bounced),)):
+        tag = "bounced" if r["id"] in bounced else "replied"
+        print(f"  {tag:8s} {who(r)}")
 
 
 # ---------------------------------------------------------------- cli
