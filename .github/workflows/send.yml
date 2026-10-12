@@ -26,7 +26,7 @@ concurrency:
 jobs:
   send:
     runs-on: ubuntu-latest
-    timeout-minutes: 300 # 40 emails x up to 180s apart is about 2h
+    timeout-minutes: 370 # GitHub's max; 100 emails x up to 180s apart is about 5h
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
