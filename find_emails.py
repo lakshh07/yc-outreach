@@ -78,16 +78,17 @@ def algolia_key():
     return m.group(1)
 
 
-def fetch_companies(batches, hiring_only):
+def fetch_companies(batches, hiring_only, query=""):
+    """batches may be [None] to search every batch (only sensible with a query)."""
     key = algolia_key()
     out = []
     for batch in batches:
         page = 0
         while True:
-            filters = [[f"batch:{batch}"]]
+            filters = [[f"batch:{batch}"]] if batch else []
             if hiring_only:
                 filters.append(["isHiring:true"])
-            body = json.dumps({"query": "", "hitsPerPage": 100, "page": page,
+            body = json.dumps({"query": query, "hitsPerPage": 100, "page": page,
                                "facetFilters": filters}).encode()
             _, txt = http_get(ALGOLIA_URL, data=body, headers={
                 "X-Algolia-Application-Id": ALGOLIA_APP, "X-Algolia-API-Key": key,
@@ -98,6 +99,13 @@ def fetch_companies(batches, hiring_only):
             if page >= d["nbPages"]:
                 break
     return out
+
+
+def find_company(name, batches=(None,), hiring_only=False):
+    """Companies whose name matches exactly (case-insensitive), else the search's closest hits."""
+    hits = fetch_companies(batches, hiring_only, query=name)
+    exact = [h for h in hits if (h.get("name") or "").strip().lower() == name.strip().lower()]
+    return exact, hits[:5]
 
 
 def fetch_founders(slug):

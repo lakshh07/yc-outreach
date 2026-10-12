@@ -61,6 +61,7 @@ You don't need to activate the venv. `python3 outreach.py` switches to `.venv` o
 # 1. Find founders and their emails (one batch, or a whole year)
 python3 outreach.py find --batch "Summer 2025" --hiring-only
 python3 outreach.py find --batch 2025 --hiring-only      # Winter + Spring + Summer + Fall 2025
+python3 outreach.py find --company "Airbnb"              # just one company (repeat --company for more)
 
 # 2. Queue the founders whose email is likely right (high and medium confidence)
 python3 outreach.py queue
@@ -85,7 +86,7 @@ Run `send` and `replies` once a day until the queue is empty.
 
 | Command                                                             | Does                                                                                                    |
 | ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| `find --batch B [--hiring-only] [--limit N] [--github] [--no-smtp]` | Finds founders and emails and saves them to the database. `B` is `"Summer 2025"` or a year like `2025`. |
+| `find --batch B [--hiring-only] [--limit N] [--github] [--no-smtp]` | Finds founders and emails and saves them to the database. `B` is `"Summer 2025"` or a year like `2025`. Use `--company C` instead of (or with) `--batch` to find specific companies. |
 | `import file.csv`                                                   | Loads a CSV produced by `find_emails.py`                                                                |
 | `queue [--batch B] [--company C] [--confidence high,medium]`        | Marks founders as ready to send                                                                         |
 | `unqueue [--batch B] [--company C]`                                 | Takes founders back out of the queue                                                                    |
