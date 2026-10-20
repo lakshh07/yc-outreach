@@ -5,6 +5,7 @@ State lives in Postgres (DATABASE_URL, default: local `outreach` db).
 
   find     --batch "Summer 2025"|2025 [--hiring-only]           find founders + emails into the db
            --company "Name" [--company ...]                     ...or just for specific companies
+           --custom "Name, Name2 (domain.com)"                  ...or any company, YC or not
   import   founders.csv                                         load a CSV from find_emails.py
   queue    [--batch B] [--confidence high,medium] [--company C] mark founders ready to send
   unqueue  [--batch B] | skip EMAIL...                          take founders out of the queue
@@ -241,10 +242,12 @@ def filters(args, base):
 # ---------------------------------------------------------------- commands
 
 def cmd_find(args):
-    if not args.batch and not args.company:
-        sys.exit("find needs --batch and/or --company")
+    if not (args.batch or args.company or args.custom):
+        sys.exit("find needs --batch, --company and/or --custom")
     con = db()
     # a bare year expands to that year's batches (missing seasons just return nothing)
+    if args.custom:
+        return find_custom(con, args)
     if not args.batch:
         batches = [None]
     elif args.batch.isdigit():
@@ -283,6 +286,38 @@ def cmd_find(args):
     else:
         next_cmd = "queue" if len(batches) > 1 else f'queue --batch "{args.batch}"'
     print(f"\nAdded {added} new founders, updated {updated} emails. Next: python3 outreach.py {next_cmd}")
+
+
+def find_custom(con, args):
+    """--custom: any company. YC ones use the YC directory; others use their website and Wikidata."""
+    specs = [s for arg in args.custom for s in arg.split(",") if s.strip()]
+    print(f"{len(specs)} custom companies")
+    added = updated = 0
+    for i, spec in enumerate(specs, 1):
+        name, domain = fe.parse_custom(spec)
+        tag = f"[{i}/{len(specs)}] {name}"
+        try:
+            yc = fe.find_company(name)[0] if not domain else []
+            if yc:
+                c, people = yc[0], None
+                tag += f" (YC {c.get('batch')})"
+            else:
+                c, people = fe.custom_company(name, domain)
+                if not c:
+                    print(f'{tag}: no website found. Pass it like "{name} ({name.lower().replace(" ", "")}.com)"')
+                    continue
+                if not people:
+                    print(f"{tag}: no founders found on {c['website']}")
+                    continue
+            rows = fe.process_company(c, args.github, not args.no_smtp, founders=people)
+            a, u = upsert(con, rows)
+            added, updated = added + a, updated + u
+            summary = ", ".join(f"{r['founder']} ({r['title']})={r['confidence']}" for r in rows)
+            print(f"{tag}: {summary}")
+        except Exception as e:
+            print(f"{tag}: ERROR {e}")
+    print(f"\nAdded {added} new founders, updated {updated} emails. "
+          f"Next: python3 outreach.py queue --batch Custom (or --company NAME)")
 
 
 def cmd_import(args):
@@ -560,6 +595,8 @@ def main():
     p = sub.add_parser("find", help="find founders + emails for a YC batch")
     p.add_argument("--batch", help='"Summer 2025", or a year like 2025 for all its batches')
     p.add_argument("--company", action="append", help='a company name, e.g. "Airbnb" (repeatable)')
+    p.add_argument("--custom", action="append",
+                   help='any companies, comma-separated, e.g. "Linear, Resend (resend.com)"')
     p.add_argument("--hiring-only", action="store_true")
     p.add_argument("--limit", type=int, default=0)
     p.add_argument("--github", action="store_true")

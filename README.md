@@ -61,6 +61,7 @@ You don't need to activate the venv. `python3 outreach.py` switches to `.venv` o
 python3 outreach.py find --batch "Summer 2025" --hiring-only
 python3 outreach.py find --batch 2025 --hiring-only      # Winter + Spring + Summer + Fall 2025
 python3 outreach.py find --company "Airbnb"              # just one company (repeat --company for more)
+python3 outreach.py find --custom "Linear, Stripe, Resend (resend.com)"   # any companies, YC or not
 
 # 2. Queue the founders whose email is likely right (high and medium confidence)
 python3 outreach.py queue
@@ -81,11 +82,21 @@ python3 outreach.py status           # overall totals plus the A/B results
 
 Run `send` and `replies` once a day until the queue is empty.
 
+### Companies outside YC (`--custom`)
+
+`--custom` takes a comma-separated list of company names. Add the website in brackets when the name is ambiguous: `"Linear (linear.app)"`. For each company:
+
+1. If it's a YC company, the founders come from YC's directory, the same as `--company`.
+2. Otherwise the website comes from Clearbit's free company lookup, and the founders and execs (CEO, CTO, COO, ...) come from Wikidata and the company's own about/team pages. It keeps up to 5 people, founders first.
+3. Emails are then found the same way as for YC founders.
+
+Non-YC contacts are saved with the batch `Custom`, so `queue --batch Custom` queues just them. Their `{one_liner}` is the website's meta description, so run `preview` before sending. If no founders turn up (some sites don't name their team), the company is skipped.
+
 ### All commands
 
 | Command                                                             | Does                                                                                                    |
 | ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| `find --batch B [--hiring-only] [--limit N] [--github] [--no-smtp]` | Finds founders and emails and saves them to the database. `B` is `"Summer 2025"` or a year like `2025`. Use `--company C` instead of (or with) `--batch` to find specific companies. |
+| `find --batch B [--hiring-only] [--limit N] [--github] [--no-smtp]` | Finds founders and emails and saves them to the database. `B` is `"Summer 2025"` or a year like `2025`. Use `--company C` instead of (or with) `--batch` to find specific companies. Use `--custom "A, B (b.com)"` for any company, YC or not (see below). |
 | `import file.csv`                                                   | Loads a CSV produced by `find_emails.py`                                                                |
 | `queue [--batch B] [--company C] [--confidence high,medium]`        | Marks founders as ready to send                                                                         |
 | `unqueue [--batch B] [--company C]`                                 | Takes founders back out of the queue                                                                    |

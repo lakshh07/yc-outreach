@@ -125,6 +125,117 @@ def fetch_founders(slug):
     return cached(f"yc_{slug}", load)
 
 
+# ---------------------------------------------------------------- non-YC companies
+
+ROLE_RE = re.compile(r"(co-?\s?)?(founder|ceo|cto|cpo|coo|president)|chief( \w+)+ officer", re.I)
+PERSON_RE = re.compile(r"[A-Z][a-z]+(?:[ '-][A-Z][a-zA-Z'-]+){1,2}")
+TEAM_PATHS = ["", "/about", "/team", "/company", "/about-us"]
+MAX_PEOPLE = 5
+
+
+def parse_custom(spec):
+    """'Acme', 'Acme (acme.com)' or 'acme.com' -> (name, domain or '')."""
+    spec = spec.strip()
+    m = re.fullmatch(r"(.+?)\s*\(\s*([^()\s]+\.[a-z]{2,})\s*\)", spec, re.I)
+    if m:
+        return m.group(1), domain_of(m.group(2))
+    if re.fullmatch(r"[\w.-]+\.[a-z]{2,}", spec, re.I):
+        return spec.split(".")[0].title(), domain_of(spec)
+    return spec, ""
+
+
+def lookup_domain(name):
+    """Company name -> website domain via Clearbit's free autocomplete ('' if not found)."""
+    def load():
+        try:
+            _, txt = http_get("https://autocomplete.clearbit.com/v1/companies/suggest?query="
+                              + urllib.parse.quote(name), timeout=10)
+            hits = json.loads(txt)
+        except Exception:
+            return ""
+        exact = [h for h in hits if (h.get("name") or "").strip().lower() == name.strip().lower()]
+        return ((exact or hits or [{}])[0].get("domain")) or ""
+    return cached(f"domain_{ascii_lower(name).replace(' ', '_')}", load)
+
+
+def wikidata_founders(domain):
+    """Founders (P112) of the company whose official website (P856) is this domain."""
+    def load():
+        sites = " ".join(f"<{s}://{w}{domain}{t}>" for s in ("https", "http") for w in ("", "www.") for t in ("", "/"))
+        q = (f"SELECT ?fLabel WHERE {{ VALUES ?site {{ {sites} }} ?c wdt:P856 ?site ; wdt:P112 ?f . "
+             f'SERVICE wikibase:label {{ bd:serviceParam wikibase:language "en". }} }}')
+        try:
+            _, txt = http_get("https://query.wikidata.org/sparql?query=" + urllib.parse.quote(q),
+                              headers={"Accept": "application/sparql-results+json"}, timeout=30)
+            return sorted({b["fLabel"]["value"] for b in json.loads(txt)["results"]["bindings"]})
+        except Exception:
+            return []
+    return cached(f"wd_{domain}", load)
+
+
+def _title_ok(line, company):
+    """'Co-founder, CEO' -> True; 'CEO, Figma' (a testimonial from another company) -> False."""
+    parts = [p.strip() for p in re.split(r"[,&/|@·–—]|\b(?:and|at|of)\b", line) if p.strip()]
+    if not parts or len(line) > 60:
+        return False
+    company = company.strip().lower()
+    return any(ROLE_RE.fullmatch(p) for p in parts) and \
+        all(ROLE_RE.fullmatch(p) or p.lower() == company for p in parts)
+
+
+def site_people(website, company):
+    """Founders/execs named on the company's own pages, plus its meta description."""
+    def load():
+        base = website if "://" in website else "https://" + website
+        people, description = {}, ""
+        for path in TEAM_PATHS:
+            try:
+                _, page = http_get(base.rstrip("/") + path, timeout=10)
+            except Exception:
+                continue
+            if not description:
+                m = re.search(r'<meta[^>]+(?:name|property)="(?:og:)?description"[^>]+content="([^"]*)"', page)
+                description = html.unescape(m.group(1)).strip() if m else ""
+            # schema.org JSON-LD: "founder": {...} or [...]
+            for blob in re.findall(r'"founders?"\s*:\s*(\[[^\]]*\]|\{[^}]*\})', page):
+                try:
+                    v = json.loads(blob)
+                except ValueError:
+                    continue
+                for p in v if isinstance(v, list) else [v]:
+                    if isinstance(p, dict) and p.get("name"):
+                        people.setdefault(p["name"].strip(), "Founder")
+            if not path:
+                continue  # homepages name customers in testimonials ("Jane Doe, CEO"), not the team
+            # visible text: a name followed by its title, on the same line or the next
+            text = re.sub(r"<script.*?</script>|<style.*?</style>", " ", page, flags=re.S)
+            lines = [ln for ln in (html.unescape(x).strip() for x in re.sub(r"<[^>]+>", "\n", text).split("\n")) if ln]
+            for a, b in zip(lines, lines[1:] + [""]):
+                m = re.fullmatch(r"(.+?)(?:\s*[,|]\s*|\s+[–—-]\s+)(.+)", a)
+                if PERSON_RE.fullmatch(a) and _title_ok(b, company):
+                    people.setdefault(a, b)
+                elif m and PERSON_RE.fullmatch(m.group(1)) and _title_ok(m.group(2), company):
+                    people.setdefault(m.group(1), m.group(2))
+        return {"people": [{"name": n, "title": t} for n, t in people.items()], "description": description}
+    return cached(f"people_{domain_of(website)}", load)
+
+
+def custom_company(name, domain=""):
+    """Build a company + people list for a non-YC company. Returns (company, people)."""
+    domain = domain or lookup_domain(name)
+    if not domain:
+        return None, []
+    site = site_people(domain, name)
+    people = {ascii_lower(p["name"]): p for p in site["people"]}
+    for n in wikidata_founders(domain):
+        people.setdefault(ascii_lower(n), {"name": n, "title": "Founder"})
+    # founders first, then other execs
+    ranked = sorted(people.values(), key=lambda p: "founder" not in p["title"].lower())[:MAX_PEOPLE]
+    company = {"name": name, "slug": None, "website": f"https://{domain}", "batch": "Custom",
+               "one_liner": site["description"], "isHiring": None}
+    return company, [{"name": p["name"], "title": p["title"], "linkedin": "", "twitter": ""} for p in ranked]
+
+
 # ---------------------------------------------------------------- names & patterns
 
 def ascii_lower(s):
@@ -294,11 +405,12 @@ def smtp_check(domain, addresses):
 
 # ---------------------------------------------------------------- pipeline
 
-def process_company(c, use_github, use_smtp):
+def process_company(c, use_github, use_smtp, founders=None):
+    """founders defaults to the company's YC page; pass a list for non-YC companies."""
     rows = []
     website = c.get("website") or ""
-    info = fetch_founders(c["slug"])
-    founders = info["founders"]
+    if founders is None:
+        founders = fetch_founders(c["slug"])["founders"]
     if not founders:
         return rows
 
