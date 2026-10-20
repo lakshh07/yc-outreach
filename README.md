@@ -18,7 +18,7 @@ Pick a YC batch (or a whole year), and it:
 ## Requirements
 
 - **Python 3.10+**
-- **PostgreSQL** running locally (or any Postgres you can reach with a URL)
+- **Docker** to run Postgres (or any Postgres you can reach with a URL)
 - **A Gmail account** with 2-Step Verification turned on, so you can create an App Password
 - **Outbound port 25** for the SMTP email check. Most home connections allow it, but many cloud servers block it. Without it, the tool still works, but guessed emails come out as low confidence.
 
@@ -31,9 +31,8 @@ git clone <this repo> && cd outreach
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 
-# 2. Postgres database
-brew install postgresql@18 && brew services start postgresql@18   # macOS, skip if you have Postgres
-createdb outreach                     # or: createdb -U postgres outreach
+# 2. Postgres database (runs in Docker on 127.0.0.1:5432 and starts with Docker)
+docker compose up -d
 
 # 3. Config
 cp .env.example .env                  # then edit .env (see below)
@@ -98,38 +97,6 @@ Run `send` and `replies` once a day until the queue is empty.
 | `status`                                                            | Shows totals, a per-batch breakdown and the A/B results                                                 |
 | `ab`                                                                | Shows only the A/B results                                                                              |
 | `list [--status S] [--batch B] [--confidence C]`                    | Lists founders. Statuses: `new`, `queued`, `sent`, `replied`, `bounced`, `failed`, `skipped`.           |
-
----
-
-## Running on a schedule (GitHub Actions)
-
-`.github/workflows/send.yml` runs `replies` and then `send` every weekday at 16:00 UTC on GitHub's servers, so your laptop can be closed. `find` still runs on your laptop, because GitHub blocks the port 25 it uses to check emails.
-
-**1. Move the database online.** GitHub can't reach the Postgres on your laptop. Create a free database on [Neon](https://neon.tech) or [Supabase](https://supabase.com) and copy your data across:
-
-```bash
-pg_dump --no-owner --no-acl "postgresql://postgres@127.0.0.1/outreach" | psql "<hosted database URL>"
-```
-
-Then set `DATABASE_URL` in your `.env` to the hosted URL, so your laptop and GitHub use the same data. Keep its `?sslmode=require`.
-
-**2. Add your secrets** (from the repo folder, with the [GitHub CLI](https://cli.github.com)):
-
-```bash
-gh secret set -f .env               # GMAIL_*, FROM_NAME, DATABASE_URL, DAILY_LIMIT, ...
-gh secret set TEMPLATE < template.txt
-```
-
-Or add them by hand under the repo's **Settings → Secrets and variables → Actions**. `template.txt` goes in a secret named `TEMPLATE`.
-
-**3. Try it.** In the **Actions** tab, open **send**, click **Run workflow**, and tick **dry run**. You can also pick a batch or a limit there.
-
-After that, queue founders from your laptop as usual (`queue --batch ...`), and the next scheduled run sends them. To change the time, edit the `cron` line (it's in UTC).
-
-- **Logs are public on a public repo**, so the workflow sets `REDACT_LOGS=1` and prints `contact #123` instead of names and emails. Run `list` locally to see who that is.
-- **GitHub turns off schedules after 60 days without commits** in a public repo. Re-enable it in the Actions tab if that happens.
-- **Scheduled runs can start 5–30 minutes late** when GitHub is busy.
-- **Google may email you a "new sign-in" alert** the first time it runs. That's expected with an App Password.
 
 ---
 
@@ -212,7 +179,7 @@ outreach.py            main CLI (find, queue, send, track)
 find_emails.py         email finder (also works on its own, writes a CSV)
 template.example.txt   example email; copy it to template.txt
 .env.example           example config; copy it to .env
-.github/workflows/send.yml   scheduled sending on GitHub Actions
+docker-compose.yml     local Postgres
 requirements.txt
 ```
 

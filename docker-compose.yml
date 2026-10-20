@@ -1,0 +1,14 @@
+services:
+  postgres:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: outreach
+      POSTGRES_HOST_AUTH_METHOD: trust # no password, same as DBngin; only reachable from this machine
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:
