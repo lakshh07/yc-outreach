@@ -95,7 +95,7 @@ CFG = {
     "daily_limit": int(os.environ.get("DAILY_LIMIT", 40)),
     "min_delay": float(os.environ.get("MIN_DELAY", 60)),
     "max_delay": float(os.environ.get("MAX_DELAY", 180)),
-    # hide founder names/emails in output, e.g. in public GitHub Actions logs
+    # hide founder names/emails in output, e.g. in shared logs
     "redact": os.environ.get("REDACT_LOGS", "").lower() in ("1", "true", "yes"),
 }
 
